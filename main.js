@@ -27,7 +27,7 @@ function doPost(e) {
 
 function createReplyMessage(userId, receivedMessage) {
   const mode = getUserMode(userId);
-
+  showLoading(userId, 15)
   if (receivedMessage === '記入モード') {
     setUserMode(userId, 'waiting_input');
     return '記録モードに入りました。次のメッセージを記録します。';
@@ -67,20 +67,6 @@ function createReplyMessage(userId, receivedMessage) {
   // 正常削除 → モード解除
   clearUserMode(userId);
   return result;
-}
-
-
-  else if (mode === 'waiting_delete') {
-    const deleteIndex = Number(receivedMessage);
-
-    // 数字以外が来たらエラー返す + モード継続
-    if (!Number.isInteger(deleteIndex)) {
-      return '数字で削除したい番号を送ってください。';
-    }
-
-    const result = deleteFromSheat(1, deleteIndex);
-    clearUserMode(userId);
-    return result;
   }
   else {
     return "";
