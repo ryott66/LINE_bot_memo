@@ -27,72 +27,89 @@ function doPost(e) {
 
 function createReplyMessage(userId, receivedMessage) {
   const mode = getUserMode(userId);
-  showLoading(userId, 15)
-  if (receivedMessage === '記入モード') {
-    setUserMode(userId, 'waiting_input');
-    return '記録モードに入りました。次のメッセージを記録します。';
-  }
-  else if (receivedMessage === '削除モード') {
-    setUserMode(userId, 'waiting_delete');
-    return '削除モードに入りました。削除したい番号を送ってください。削除をやめる場合は0を入力してください';
-  }
-  else if (receivedMessage === 'URL') {
-    return readSheat(0);
-  }
-  else if (receivedMessage === 'メモ') {
-    return readSheat(1);
-  }
-  else if (mode === 'waiting_input') {
-    recordToSheat(receivedMessage, 1);
+  showLoading(userId, 15);
+  // INPUT / DELETE のモード判定を優先
+  if (mode === 'waiting_memo_input') {
+    recordToSheat(receivedMessage, getMemoSheetName(userId));
     clearUserMode(userId);
     return 'メモを記録しました。';
   }
-  else if (mode === 'waiting_delete') {
-  const deleteIndex = Number(receivedMessage);
-  // 0 → 何もせず削除モード解除
-  if (deleteIndex === 0) {
+  if (mode === 'waiting_url_input') {
+    recordToSheat(receivedMessage, getUrlSheetName(userId));
     clearUserMode(userId);
-    return '削除をキャンセルしました。';
+    return 'URLを記録しました。';
   }
-  // 数字でない → モード継続
-  if (!Number.isInteger(deleteIndex)) {
-    return '数字で削除したい番号を送ってください。（0でキャンセル）';
+  if (mode === 'waiting_memo_delete') {
+    return handleDelete(userId, receivedMessage, getMemoSheetName(userId));
   }
-  // 削除実行
-  const result = deleteFromSheat(1, deleteIndex);
-  // deleteFromSheat() が「無効な番号」ならモード継続
-  if (result === '無効な番号です。') {
-    return '無効な番号です。再度番号を送ってください。（0でキャンセル）';
+  if (mode === 'waiting_url_delete') {
+    return handleDelete(userId, receivedMessage, getUrlSheetName(userId));
   }
-  // 正常削除 → モード解除
-  clearUserMode(userId);
-  return result;
+
+  // コマンド
+  if (receivedMessage === 'メモ') {
+    return readSheat(getMemoSheetName(userId));
   }
-  else {
-    return "";
+  if (receivedMessage === 'メモ記録モード') {
+    setUserMode(userId, 'waiting_memo_input');
+    return 'メモ記録モードに入りました。次のメッセージを記録します。';
   }
+  if (receivedMessage === 'メモ削除モード') {
+    setUserMode(userId, 'waiting_memo_delete');
+    return '削除したい番号を送ってください。（0でキャンセル）';
+  }
+  if (receivedMessage === 'URL') {
+    return readSheat(getUrlSheetName(userId));
+  }
+  if (receivedMessage === 'URL記録モード') {
+    setUserMode(userId, 'waiting_url_input');
+    return 'URL記録モードに入りました。次のメッセージを記録します。';
+  }
+  if (receivedMessage === 'URL削除モード') {
+    setUserMode(userId, 'waiting_url_delete');
+    return '削除したい番号を送ってください。（0でキャンセル）';
+  }
+  return "☺️";
 }
 
-function recordToSheat(word, type) {
-  const spreadSheet = SpreadsheetApp.openByUrl(SHEET_URL);
-  const theSheet = spreadSheet.getSheets()[type];
+function readSheat(name) {
+  const theSheet = getOrCreateSheet(name)
+  const dataRanges = theSheet.getDataRange();
+  const datas = dataRanges.getValues();
+  // 空行を除外
+  const filtered = datas.filter(row => row.join('').trim() !== '');
+  if (filtered.length === 0) {
+    return 'データが存在しません。';
+  }
+  const dataString = filtered.map((row, i) => `${i + 1}. ${row.join(' ')}`).join('\n');
+  return dataString;
+}
+
+function recordToSheat(word, name) {
+  const theSheet = getOrCreateSheet(name)
   const lastRow = theSheet.getLastRow();
   theSheet.getRange(lastRow + 1, 1).setValue(word);
 }
 
-function readSheat(type) {
-  const spreadSheet = SpreadsheetApp.openByUrl(SHEET_URL);
-  const theSheet = spreadSheet.getSheets()[type];
-  const dataRanges = theSheet.getDataRange();
-  const datas = dataRanges.getValues();
-
-  const dataString = datas.map((row, i) => `${i + 1}. ${row.join(' ')}`).join('\n');
-  return dataString || 'データが存在しません。';
+function handleDelete(userId, receivedMessage, sheetName) {
+  const deleteIndex = Number(receivedMessage);
+  if (deleteIndex === 0) {
+    clearUserMode(userId);
+    return '削除をキャンセルしました。';
+  }
+  if (!Number.isInteger(deleteIndex)) {
+    return '数字で削除したい番号を送ってください。（0でキャンセル）';
+  }
+  const result = deleteFromSheat(sheetName, deleteIndex);
+  if (result === '無効な番号です。') {
+    return '無効な番号です。再度番号を送ってください。（0でキャンセル）';
+  }
+  clearUserMode(userId);
+  return result;
 }
 
-function deleteFromSheat(type, index) {
-  const spreadSheet = SpreadsheetApp.openByUrl(SHEET_URL);
-  const theSheet = spreadSheet.getSheets()[type];
+function deleteFromSheat(name, index) {
+  const theSheet = getOrCreateSheet(name)
   const lastRow = theSheet.getLastRow();
 
   if (index < 1 || index > lastRow) {
@@ -100,20 +117,6 @@ function deleteFromSheat(type, index) {
   }
 
   theSheet.deleteRow(index);
-  return `メモ ${index} を削除しました。`;
+  return `番号 ${index} を削除しました。`;
 }
 
-function setUserMode(userId, mode) {
-  const userProps = PropertiesService.getUserProperties();
-  userProps.setProperty(userId, mode);
-}
-
-function getUserMode(userId) {
-  const userProps = PropertiesService.getUserProperties();
-  return userProps.getProperty(userId) || 'idle';
-}
-
-function clearUserMode(userId) {
-  const userProps = PropertiesService.getUserProperties();
-  userProps.deleteProperty(userId);
-}
