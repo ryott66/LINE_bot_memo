@@ -1,3 +1,32 @@
+function safeFetch(url, options, context = 'LINE API') {
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const code = response.getResponseCode();
+
+    if (code !== 200) {
+      console.error(`[${context}] HTTP ${code} - ${response.getContentText()}`);
+      return null;
+    }
+    logResponse(url, options, response);
+    return response;
+  } catch (err) {
+    console.error(`[${context}] Fetch error: ${err.message}`);
+    return null;
+  }
+}
+
+function logResponse(url, options, response) {
+  Logger.log('==== API Request ====');
+  Logger.log('URL: ' + url);
+  Logger.log('Payload: ' + options.payload);
+  Logger.log('Headers: ' + JSON.stringify(options.headers));
+  if (response) {
+    Logger.log('Response Code: ' + response.getResponseCode());
+    Logger.log('Response Body: ' + response.getContentText());
+  }
+  Logger.log('=====================');
+}
+
 function showLoading(userId, seconds) {
   const ACCESS_TOKEN = PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN');
   const url = 'https://api.line.me/v2/bot/chat/loading/start';

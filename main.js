@@ -22,8 +22,18 @@ function doPost(e) {
       }],
     }),
   };
-  UrlFetchApp.fetch(LINE_URL, option);
+  safeFetch(LINE_URL, option, 'LINE reply')
+  return ContentService.createTextOutput('');
 }
+
+// doGet を用意すると webhook の疎通確認やブラウザでの確認用に 200 を返せます
+function doGet(e) {
+  // ヘルスチェックや LINE の初期の GET 送信で確認できる
+  console.info('[doGet] health check', JSON.stringify(e || {}));
+  return ContentService.createTextOutput('OK');
+}
+
+
 
 function createReplyMessage(userId, receivedMessage) {
   const mode = getUserMode(userId);
