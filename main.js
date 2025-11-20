@@ -3,72 +3,54 @@ const LINE_REPLY_URL = 'https://api.line.me/v2/bot/message/reply';
 const LINE_SHOW_LOADING_URL = 'https://api.line.me/v2/bot/chat/loading/start';
 const SHEET_URL = PropertiesService.getScriptProperties().getProperty('SHEET_URL');
 const CHANNEL_SECRET = (PropertiesService.getScriptProperties().getProperty('CHANNEL_SECRET') || '').trim();
+const RELAY_SECRET = PropertiesService.getScriptProperties().getProperty('RELAY_SECRET');
 
-function verifySignature(body, signature) {
-  // if (!signature) return false;
-
-  // const hmac = Utilities.computeHmacSha256Signature(
-  //   body,                // ← 文字列そのまま
-  //   CHANNEL_SECRET       // ← 文字列そのまま (鍵は変換禁止)
-  // );
-
-  // const expected = Utilities.base64Encode(hmac);
-
-  // return expected === signature;
-  // const bodyBytes = Utilities.newBlob(body).getBytes();
-  // const keyBytes = Utilities.newBlob(CHANNEL_SECRET).getBytes();
-
-  // const digest = Utilities.computeHmacSha256Signature(bodyBytes, keyBytes);
-  // const hash = Utilities.base64Encode(digest);
-
-  // return hash === signature.trim();
-  return true;
-}
 
 function doPost(e) {
-  const okResponse = ContentService
-    .createTextOutput('OK')
-    .setMimeType(ContentService.MimeType.TEXT);
+  try {
+    const ok = ContentService.createTextOutput("OK");
 
-  const body = e.postData.contents;
-  const headers = e.postData.headers || {};
-  const signature = headers['x-line-signature'] || headers['X-Line-Signature'] || headers['X-LINE-SIGNATURE'];
+    const body = JSON.parse(e.postData.contents);
+    const rawBytes = Utilities.base64Decode(body.raw);
+    const raw = Utilities.newBlob(rawBytes).getDataAsString("UTF-8");
 
-  if (!verifySignature(body, signature)) {
-    return okResponse
-  }
+    const keyBytes = Utilities.newBlob(RELAY_SECRET).getBytes();
+    const calc = Utilities.computeHmacSha256Signature(rawBytes, keyBytes);
+    const hash = Utilities.base64Encode(calc);
 
-  const json = JSON.parse(e.postData.contents);
-  const data = json.events[0];
-  const userId = data.source.userId;
-  const message = createReplyMessage(userId, data.message.text);
+    if (hash !== body.meta.relaySignature) {
+      console.error("relay signature mismatch");
+      return ok;
+    }
 
-  const option = {
-    'headers': {
-      'Content-Type': 'application/json; charset=UTF-8',
-      'Authorization': 'Bearer ' + ACCESS_TOKEN,
-    },
-    'method': 'post',
-    'payload': JSON.stringify({
-      'replyToken': data.replyToken,
-      'messages': [{
-        "type": "text",
-        "text": message
-      }],
-    }),
-  };
-  safeFetch(LINE_REPLY_URL, option, 'LINE reply')
-  return okResponse;
+    // LINEのイベントオブジェクトに復元
+    const json = JSON.parse(raw);
+    const data = json.events[0];
+
+    const userId = data.source.userId;
+    const message = createReplyMessage(userId, data.message.text);
+
+    const option = {
+      'headers': {
+        'Content-Type': 'application/json; charset=UTF-8',
+        'Authorization': 'Bearer ' + ACCESS_TOKEN,
+      },
+      'method': 'post',
+      'payload': JSON.stringify({
+        'replyToken': data.replyToken,
+        'messages': [{
+          "type": "text",
+          "text": message
+        }],
+      }),
+    };
+    safeFetch(LINE_REPLY_URL, option, 'LINE reply')
+    return ok;
+  } catch (err) {
+  log({ error: err.toString(), body: e.postData.contents });
+  return ok;
 }
-
-// // doGet を用意すると webhook の疎通確認やブラウザでの確認用に 200 を返せます
-// function doGet(e) {
-//   // ヘルスチェックや LINE の初期の GET 送信で確認できる
-//   console.info('[doGet] health check', JSON.stringify(e || {}));
-//   return okResponse ;
-// }
-
-
+}
 
 function createReplyMessage(userId, receivedMessage) {
   const mode = getUserMode(userId);

@@ -461,7 +461,6 @@ function runAllTests() {
     testCreateReplyMessageHandlesCancelDeletion,
     testCreateReplyMessageHandlesInvalidIndex,
     testCreateReplyMessageHandlesNonNumericInput
-    , testSignatureComputation
   ];
   
   let passed = 0;
@@ -483,22 +482,4 @@ function runAllTests() {
   console.log('======================================');
   
   return { passed, failed };
-}
-
-// Test for signature computation used by LINE
-function computeLineSignature(body, secret) {
-  // Utilities.computeHmacSha256Signature の再現 (GAS環境でのみ実行可)
-  // ここでは簡易的に node の crypto で検証する想定だが、GAS上では同じ実装を用いる
-  const hmac = Utilities.computeHmacSha256Signature(body, secret);
-  return Utilities.base64Encode(hmac);
-}
-
-function testSignatureComputation() {
-  // テスト用のダミーボディ
-  const body = JSON.stringify({ test: 'hello' });
-  const secret = 'test_secret_123';
-  const signature = computeLineSignature(body, secret);
-
-  if (!signature) throw new Error('Signature computation returned empty');
-  console.log('✓ Test signature computed:', signature);
 }

@@ -1,3 +1,9 @@
+function log(msg) {
+  const ss = SpreadsheetApp.openByUrl(SHEET_URL);
+  const sheet = ss.getSheetByName("Log") || ss.insertSheet("Log");
+  sheet.appendRow([new Date(), JSON.stringify(msg)]);
+}
+
 function safeFetch(url, options, context = 'LINE API') {
   try {
     const response = UrlFetchApp.fetch(url, options);
