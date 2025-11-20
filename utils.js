@@ -28,21 +28,32 @@ function logResponse(url, options, response) {
 }
 
 function showLoading(userId, seconds) {
-  const ACCESS_TOKEN = PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN');
-  const url = 'https://api.line.me/v2/bot/chat/loading/start';
-  const payload = JSON.stringify({
-    chatId: userId,
-    loadingSeconds: seconds
-  });
-  const option = {
-    'headers': {
-      'Content-Type': 'application/json; charset=UTF-8',
-      'Authorization': 'Bearer ' + ACCESS_TOKEN
-    },
-    'method': 'post',
-    'payload': payload
-  };
-  UrlFetchApp.fetch(url, option);
+  try {
+    const ACCESS_TOKEN = PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN');
+    const payload = JSON.stringify({
+      chatId: userId,
+      loadingSeconds: seconds
+    });
+    const option = {
+      'headers': {
+        'Content-Type': 'application/json; charset=UTF-8',
+        'Authorization': 'Bearer ' + ACCESS_TOKEN
+      },
+      'method': 'post',
+      'payload': payload,
+      // muteHttpExceptions を付け、呼び出し失敗でも例外にしない
+      'muteHttpExceptions': true
+    };
+    // safeFetch を使ってエラーを吸収する
+    const resp = safeFetch(LINE_SHOW_LOADING_URL, option, 'LINE loading');
+    if (!resp) {
+      console.warn('[showLoading] loading API returned non-200 or fetch failed');
+    }
+    return resp;
+  } catch (err) {
+    console.error('[showLoading] unexpected error', err);
+    return null;
+  }
 }
 
 function getMemoSheetName(userId) {
